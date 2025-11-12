@@ -12,7 +12,7 @@ class Program
     static async Task Main()
     {
         Thread.Sleep(100);
-        PrintLine("Youtube video mp4 downloader - ")
+        PrintLine("             Youtube video mp4 downloader\n - https://github.com/Ventern-gtr/YoutubeDownloader -\n");
         PrintLine("Enter YouTube video URL:");
         string url = Console.ReadLine();
 
