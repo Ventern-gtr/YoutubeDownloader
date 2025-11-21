@@ -1,14 +1,11 @@
-﻿using System;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Threading.Tasks;
+﻿using AngleSharp.Dom;
 using YoutubeExplode;
 using YoutubeExplode.Videos.Streams;
 
 class Program
 {
     private static readonly string downloadsPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\Downloads";
+    private static string audioFilePathSave;
     static async Task Main()
     {
         Thread.Sleep(100);
@@ -19,20 +16,29 @@ class Program
         var youtube = new YoutubeClient();
         var video = await youtube.Videos.GetAsync(url);
         var streamManifest = await youtube.Videos.Streams.GetManifestAsync(video.Id);
-        var streams = streamManifest.GetVideoStreams()
+        var videoStreams = streamManifest.GetVideoStreams()
             .OrderByDescending(s => s.VideoQuality)
-            .Where(s => s.VideoCodec != null);
+            .Where(s => s.VideoCodec != null)
+            .ToList();
 
         PrintLine("\nAvailable qualities:");
 
-        var uniqueStreams = streams
-            .GroupBy(s => GetQualityLabel(s))
-            .Select(g => g.OrderByDescending(s => s.Size.Bytes).First())
-            .ToList();
-
         int index = 1;
-        foreach (var stream in uniqueStreams)
+        var seenStreams = new HashSet<string>();
+        var filteredStreams = new List<IStreamInfo>();
+
+        foreach (var stream in videoStreams)
         {
+            string streamKey = $"{GetQualityLabel(stream)}";
+
+            if (seenStreams.Contains(streamKey))
+            {
+                continue;
+            }
+
+            seenStreams.Add(streamKey);
+            filteredStreams.Add(stream);
+
             string sizeToShow = "N/A";
             if (stream.Size.GigaBytes > 0.999)
             {
@@ -50,18 +56,26 @@ class Program
             {
                 sizeToShow = MathF.Round(stream.Size.Bytes, 1) + " Bytes";
             }
+
             PrintLine($"{index}: {GetQualityLabel(stream)} ({sizeToShow})");
             index++;
         }
 
-        PrintLine($"Select quality number (1-{uniqueStreams.Count}):");
-        int choice = int.Parse(Console.ReadLine());
-        var selectedStream = uniqueStreams[choice - 1];
+        PrintLine($"Select quality number (1-{filteredStreams.Count}):");
+        int choice;
+        if (!int.TryParse(Console.ReadLine(), out choice) || choice < 1 || choice > filteredStreams.Count)
+        {
+            PrintLine("Invalid choice");
+            return;
+        }
 
-        string filename = $"{SanitizeFileName(video.Title)}.mp4";
-        string filePath = Path.Combine(downloadsPath, filename);
-        await youtube.Videos.Streams.DownloadAsync(selectedStream, filePath);
-        PrintLine($"Downloaded to your downloads folder");
+        var selectedStream = filteredStreams[choice - 1];
+        string videoFileName = $"{SanitizeFileName(video.Title)}.mp4";
+
+        string downloadsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+        string videoFilePath = Path.Combine(downloadsPath, videoFileName);
+        await youtube.Videos.Streams.DownloadAsync(selectedStream, videoFilePath);
+        PrintLine($"Video downloaded to {videoFilePath}");
     }
 
     static string GetQualityLabel(IStreamInfo stream)
